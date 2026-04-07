@@ -12,6 +12,9 @@ text:
       then:
         - lambda: 'id(mqtt_client).set_broker_address(x.c_str());'
     state_topic: null
+    web_server:
+      sorting_weight: 0
+      sorting_group_id: sorting_group_mqtt
 
   - platform: template
     name: MQTT Username
@@ -25,6 +28,9 @@ text:
       then:
         - lambda: 'id(mqtt_client).set_username(x.c_str());'
     state_topic: null
+    web_server:
+      sorting_weight: 3
+      sorting_group_id: sorting_group_mqtt
 
   - platform: template
     name: MQTT Password
@@ -38,6 +44,9 @@ text:
       then:
         - lambda: 'id(mqtt_client).set_password(x.c_str());'
     state_topic: null
+    web_server:
+      sorting_weight: 4
+      sorting_group_id: sorting_group_mqtt
 
 number:
   - platform: template
@@ -54,6 +63,9 @@ number:
       then:
         - lambda: 'id(mqtt_client).set_broker_port(x);'
     state_topic: null
+    web_server:
+      sorting_weight: 2
+      sorting_group_id: sorting_group_mqtt
 
 esphome:
   name: yx-ws01-bk7231n
@@ -80,6 +92,20 @@ logger:
 web_server:
   port: 80
   local: true
+  version: 3
+  sorting_groups:
+    - id: sorting_group_wifi
+      name: "Wifi"
+      sorting_weight: 10
+    - id: sorting_group_controls
+      name: "Controls"
+      sorting_weight: 20
+    - id: sorting_group_mqtt
+      name: "MQTT"
+      sorting_weight: 30
+    - id: sorting_group_device
+      name: "Device"
+      sorting_weight: 40
 
 wifi:
   ap:
@@ -110,10 +136,16 @@ button:
   - platform: restart
     name: Restart
     id: restart_button
+    web_server:
+      sorting_weight: 1
+      sorting_group_id: sorting_group_device
 
   - platform: factory_reset
     name: Restart with Factory Default Settings
     id: factory_reset_button
+    web_server:
+      sorting_weight: 2
+      sorting_group_id: sorting_group_device
 
 switch:
   - platform: gpio
@@ -156,28 +188,46 @@ binary_sensor:
         then:
           - button.press: factory_reset_button
 
-sensor:
-  - platform: wifi_signal
-    name: Wifi Signal
-    update_interval: 15s
-    state_topic: null
-
 text_sensor:
   - platform: libretiny
     version:
       name: LibreTiny Version
       state_topic: null
+      web_server:
+        sorting_weight: 0
+        sorting_group_id: sorting_group_device
   
   - platform: wifi_info
     ip_address:
-      name: Device IP Address
+      name: IP Address
       state_topic: null
-    ssid:
-      name: Device Connected SSID
-      state_topic: null
-    bssid:
-      name: Device Connected BSSID
-      state_topic: null
+      web_server:
+        sorting_weight: 0
+        sorting_group_id: sorting_group_wifi
     mac_address:
-      name: Device Mac Wifi Address
+      name: MAC Address
       state_topic: null
+      web_server:
+        sorting_weight: 1
+        sorting_group_id: sorting_group_wifi
+    ssid:
+      name: Connected SSID
+      state_topic: null
+      web_server:
+        sorting_weight: 2
+        sorting_group_id: sorting_group_wifi
+    bssid:
+      name: Connected BSSID
+      state_topic: null
+      web_server:
+        sorting_weight: 3
+        sorting_group_id: sorting_group_wifi
+
+sensor:
+  - platform: wifi_signal
+    name: Wifi Signal
+    update_interval: 15s
+    state_topic: null
+    web_server:
+      sorting_weight: 4
+      sorting_group_id: sorting_group_wifi
