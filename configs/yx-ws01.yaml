@@ -74,10 +74,34 @@ esphome:
   on_boot: 
     then:
       - lambda: |-
+          // Get the correct topic prefix
           char buf[ESPHOME_DEVICE_NAME_MAX_LEN + 1];
           auto topic_prefix = str_sanitize_to(buf, App.get_name().c_str());
+
+          // Set the topic prefix for the MQTT client and publish it to a sensor so it can be displayed in the web server
           id(mqtt_client).set_topic_prefix(topic_prefix, topic_prefix);
           id(topic_prefix_sensor).publish_state(topic_prefix);
+
+          // Enable birth, last will and shutdown messages with the correct topic prefix
+          const auto status_topic = std::string(topic_prefix) + "/status";
+          id(mqtt_client).set_birth_message(mqtt::MQTTMessage{
+            .topic = status_topic,
+            .payload = "online",
+            .qos = 1,
+            .retain = true,
+          });
+          id(mqtt_client).set_last_will(mqtt::MQTTMessage{
+            .topic = status_topic,
+            .payload = "offline",
+            .qos = 1,
+            .retain = true,
+          });
+          id(mqtt_client).set_shutdown_message(mqtt::MQTTMessage{
+            .topic = status_topic,
+            .payload = "offline",
+            .qos = 1,
+            .retain = true,
+          });
 
 bk72xx:
   board: generic-bk7231n-qfn32-tuya
@@ -119,7 +143,7 @@ mqtt:
   id: mqtt_client
   broker: ""
   log_topic: null
-  topic_prefix: "placeholder"
+  topic_prefix: null
 
 ota:
   - platform: esphome
@@ -164,7 +188,7 @@ switch:
       then:
         - light.turn_off: status_light
     state_topic: !lambda 'return id(mqtt_client).get_topic_prefix() + "/switch/state";'
-    command_topic: !lambda 'return id(mqtt_client).get_topic_prefix() + "/switch/command";'
+    command_topic: !lambda 'return id(mqtt_client).get_topic_prefix() + "/switch/state";'
     retain: true
     command_retain: false
     qos: 1
