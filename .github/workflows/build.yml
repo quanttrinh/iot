@@ -1,0 +1,106 @@
+name: "Build ESPHome firmware"
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: ESPHome version to use
+        required: false
+        type: string
+        default: latest
+      release:
+        description: Whether to create a release
+        required: false
+        type: boolean
+        default: false
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    strategy:
+      matrix:
+        config: [ yx-ws01 ]
+    runs-on: ubuntu-latest
+    name: build
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+
+      - name: Install ESPHome
+        run: |
+          if [[ "${{ inputs.version }}" == "latest" ]]; then
+            pip install esphome
+          else
+            pip install esphome~=${{ inputs.version }}
+          fi
+
+      - name: Compile firmware
+        id: compile
+        run: |
+          cd configs
+          esphome compile ${{ matrix.config }}.yaml
+          config=".esphome/storage/${{ matrix.config }}.yaml.json"
+          name=$(jq -r '.name' "$config")
+          esphome_version=$(jq -r '.esphome_version' "$config")
+          firmware_bin_path=$(jq -r '.firmware_bin_path' "$config")
+          cd ..
+          mkdir -p build/
+          cd build/
+          echo "name="$name"" > version.src
+          echo "esphome_version="$esphome_version"" >> version.src
+          mv "$firmware_bin_path" "$name-$(basename "$firmware_bin_path")"
+          echo "name=$name" >> $GITHUB_OUTPUT
+
+      - uses: actions/upload-artifact@v6
+        with:
+          name: ${{ steps.compile.outputs.name }}
+          path: |
+            build/*
+
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Get current date
+        id: date
+        run: |
+          echo "datever=$(date +'%y.%m.%d')" >> $GITHUB_OUTPUT
+
+      - uses: actions/download-artifact@v8
+        with:
+          path: artifacts
+          merge-multiple: true
+
+      - name: Generate release notes
+        run: |
+          echo "## Release - v${{ steps.date.outputs.datever }}" > release_body.md
+          echo "| Device | ESPHome Version |" >> release_body.md
+          echo "| --- | --- |" >> release_body.md
+          for src in artifacts/*.src; do
+            source "$src"
+            echo "| $name | $esphome_version |" >> release_body.md
+          done
+
+      - uses: softprops/action-gh-release@v2
+        if: ${{ inputs.release }}
+        with:
+          tag_name: v${{ steps.date.outputs.datever }}
+          body_path: release_body.md
+          make_latest: true
+          working_directory: artifacts
+          files: |
+            *.bin
+            *.uf2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
