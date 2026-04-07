@@ -94,11 +94,11 @@ web_server:
   local: true
   version: 3
   sorting_groups:
-    - id: sorting_group_wifi
-      name: "Wifi"
-      sorting_weight: 10
     - id: sorting_group_controls
       name: "Controls"
+      sorting_weight: 10
+    - id: sorting_group_wifi
+      name: "Wifi"
       sorting_weight: 20
     - id: sorting_group_mqtt
       name: "MQTT"
