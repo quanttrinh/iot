@@ -11,6 +11,7 @@ text:
     on_value:
       then:
         - lambda: 'id(mqtt_client).set_broker_address(x.c_str());'
+    state_topic: null
 
   - platform: template
     name: MQTT Username
@@ -23,6 +24,7 @@ text:
     on_value: 
       then:
         - lambda: 'id(mqtt_client).set_username(x.c_str());'
+    state_topic: null
 
   - platform: template
     name: MQTT Password
@@ -35,6 +37,7 @@ text:
     on_value: 
       then:
         - lambda: 'id(mqtt_client).set_password(x.c_str());'
+    state_topic: null
 
 number:
   - platform: template
@@ -50,11 +53,18 @@ number:
     on_value:
       then:
         - lambda: 'id(mqtt_client).set_broker_port(x);'
+    state_topic: null
 
 esphome:
   name: yx-ws01-bk7231n
   friendly_name: YX-WS01 Switch
   name_add_mac_suffix: true
+  on_boot: 
+    then:
+      - lambda: |-
+          char buf[ESPHOME_DEVICE_NAME_MAX_LEN + 1];
+          auto topic_prefix = str_sanitize_to(buf, App.get_name().c_str());
+          id(mqtt_client).set_topic_prefix(topic_prefix, topic_prefix);
 
 bk72xx:
   board: generic-bk7231n-qfn32-tuya
@@ -81,6 +91,8 @@ mdns:
 mqtt:
   id: mqtt_client
   broker: ""
+  log_topic: null
+  topic_prefix: "placeholder"
 
 ota:
   - platform: esphome
@@ -109,8 +121,8 @@ switch:
     id: replay_switch
     pin:
       number: P7
-    state_topic: !lambda 'return App.get_name() + "/switch/state";'
-    command_topic: !lambda 'return App.get_name() + "/switch/state";'
+    state_topic: !lambda 'return id(mqtt_client).get_topic_prefix() + "/switch/state";'
+    command_topic: !lambda 'return id(mqtt_client).get_topic_prefix() + "/switch/command";'
     retain: true
     command_retain: false
     qos: 1
@@ -148,18 +160,24 @@ sensor:
   - platform: wifi_signal
     name: Wifi Signal
     update_interval: 15s
+    state_topic: null
 
 text_sensor:
   - platform: libretiny
     version:
       name: LibreTiny Version
+      state_topic: null
   
   - platform: wifi_info
     ip_address:
       name: Device IP Address
+      state_topic: null
     ssid:
       name: Device Connected SSID
+      state_topic: null
     bssid:
       name: Device Connected BSSID
+      state_topic: null
     mac_address:
       name: Device Mac Wifi Address
+      state_topic: null
