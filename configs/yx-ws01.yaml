@@ -127,10 +127,13 @@ ota:
 
   # - platform: http_request
 
-status_led:
-  pin:
-    number: P26
-    inverted: true
+light:
+  - platform: status_led
+    id: status_light
+    internal: true
+    pin: 
+      number: P26
+      inverted: true
 
 button:
   - platform: restart
@@ -153,6 +156,12 @@ switch:
     id: replay_switch
     pin:
       number: P7
+    on_turn_on:
+      then:
+        - light.turn_on: status_light
+    on_turn_off:
+      then:
+        - light.turn_off: status_light
     state_topic: !lambda 'return id(mqtt_client).get_topic_prefix() + "/switch/state";'
     command_topic: !lambda 'return id(mqtt_client).get_topic_prefix() + "/switch/command";'
     retain: true
