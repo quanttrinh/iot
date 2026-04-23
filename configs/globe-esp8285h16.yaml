@@ -2,24 +2,20 @@ packages:
   base: !include common/base.yaml
 
 esphome:
-  name: yx-ws01-bk7231n
-  friendly_name: YX-WS01 Switch
+  name: globe-esp8285h16
+  friendly_name: Globe Switch
 
-bk72xx:
-  board: generic-bk7231n-qfn32-tuya
+esp8266:
+  board: esp8285
   framework:
     version: latest
-    loglevel: warn
-    debug: none
-    sdk_silent: auto
-    gpio_recover: true
 
 light:
   - platform: status_led
     id: status_light
     internal: true
     pin: 
-      number: P26
+      number: GPIO13
       inverted: true
 
 switch:
@@ -27,7 +23,7 @@ switch:
     name: Switch
     id: replay_switch
     pin:
-      number: P7
+      number: GPIO12
     on_turn_on:
       then:
         - light.turn_on: status_light
@@ -46,7 +42,7 @@ binary_sensor:
     id: button_1
     internal: true
     pin:
-      number: P11
+      number: GPIO0
       inverted: true
       mode:
         input: true
@@ -65,12 +61,3 @@ binary_sensor:
           - ON for at least 3s
         then:
           - button.press: factory_reset_button
-
-text_sensor:
-  - platform: libretiny
-    version:
-      name: LibreTiny Version
-      state_topic: null
-      web_server:
-        sorting_weight: 1
-        sorting_group_id: sorting_group_device

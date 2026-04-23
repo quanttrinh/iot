@@ -1,0 +1,211 @@
+text:
+  - platform: template
+    name: MQTT Broker
+    id: mqtt_broker
+    mode: text
+    min_length: 1
+    max_length: 24
+    initial_value: 192.168.1.2
+    optimistic: true
+    restore_value: true
+    on_value:
+      then:
+        - lambda: 'id(mqtt_client).set_broker_address(x.c_str());'
+    state_topic: null
+    web_server:
+      sorting_weight: 1
+      sorting_group_id: sorting_group_mqtt
+
+  - platform: template
+    name: MQTT Username
+    id: mqtt_username
+    mode: text
+    min_length: 1
+    max_length: 32
+    optimistic: true
+    restore_value: true
+    on_value: 
+      then:
+        - lambda: 'id(mqtt_client).set_username(x.c_str());'
+    state_topic: null
+    web_server:
+      sorting_weight: 4
+      sorting_group_id: sorting_group_mqtt
+
+  - platform: template
+    name: MQTT Password
+    id: mqtt_password
+    mode: password
+    min_length: 1
+    max_length: 32
+    optimistic: true
+    restore_value: true
+    on_value: 
+      then:
+        - lambda: 'id(mqtt_client).set_password(x.c_str());'
+    state_topic: null
+    web_server:
+      sorting_weight: 5
+      sorting_group_id: sorting_group_mqtt
+
+number:
+  - platform: template
+    name: MQTT Port
+    id: mqtt_port
+    mode: box
+    min_value: 1
+    max_value: 65535
+    step: 1
+    initial_value: 1883
+    optimistic: true
+    restore_value: true
+    on_value:
+      then:
+        - lambda: 'id(mqtt_client).set_broker_port(x);'
+    state_topic: null
+    web_server:
+      sorting_weight: 3
+      sorting_group_id: sorting_group_mqtt
+
+esphome:
+  name_add_mac_suffix: true
+  on_boot: 
+    then:
+      - lambda: |-
+          // Get the correct topic prefix
+          char buf[ESPHOME_DEVICE_NAME_MAX_LEN + 1];
+          auto topic_prefix = str_sanitize_to(buf, App.get_name().c_str());
+
+          // Set the topic prefix for the MQTT client and publish it to a sensor so it can be displayed in the web server
+          id(mqtt_client).set_topic_prefix(topic_prefix, topic_prefix);
+          id(topic_prefix_sensor).publish_state(topic_prefix);
+
+          // Enable birth, last will and shutdown messages with the correct topic prefix
+          const auto status_topic = std::string(topic_prefix) + "/status";
+          id(mqtt_client).set_birth_message(mqtt::MQTTMessage{
+            .topic = status_topic,
+            .payload = "online",
+            .qos = 1,
+            .retain = true,
+          });
+          id(mqtt_client).set_last_will(mqtt::MQTTMessage{
+            .topic = status_topic,
+            .payload = "offline",
+            .qos = 1,
+            .retain = true,
+          });
+          id(mqtt_client).set_shutdown_message(mqtt::MQTTMessage{
+            .topic = status_topic,
+            .payload = "offline",
+            .qos = 1,
+            .retain = true,
+          });
+
+logger:
+
+web_server:
+  port: 80
+  local: true
+  version: 3
+  sorting_groups:
+    - id: sorting_group_controls
+      name: "Controls"
+      sorting_weight: 10
+
+    - id: sorting_group_wifi
+      name: "Wifi"
+      sorting_weight: 20
+
+    - id: sorting_group_mqtt
+      name: "MQTT"
+      sorting_weight: 30
+
+    - id: sorting_group_device
+      name: "Device"
+      sorting_weight: 40
+
+wifi:
+  ap:
+
+captive_portal:
+
+mdns:
+
+mqtt:
+  id: mqtt_client
+  broker: ""
+  log_topic: null
+  topic_prefix: null
+
+ota:
+  - platform: esphome
+  - platform: web_server
+
+button:
+  - platform: restart
+    name: Restart
+    id: restart_button
+    web_server:
+      sorting_weight: 1
+      sorting_group_id: sorting_group_device
+
+  - platform: factory_reset
+    name: Restart with Factory Default Settings
+    id: factory_reset_button
+    web_server:
+      sorting_weight: 2
+      sorting_group_id: sorting_group_device
+
+text_sensor:
+  - platform: template
+    name: "Topic Prefix"
+    id: topic_prefix_sensor
+    update_interval: never
+    state_topic: null
+    web_server:
+      sorting_weight: 0
+      sorting_group_id: sorting_group_mqtt
+
+  - platform: version
+    name: "ESPHome Version"
+    hide_timestamp: true
+    hide_hash: true
+    state_topic: null
+    web_server:
+      sorting_weight: 0
+      sorting_group_id: sorting_group_device
+
+  - platform: wifi_info
+    ip_address:
+      name: IP Address
+      state_topic: null
+      web_server:
+        sorting_weight: 0
+        sorting_group_id: sorting_group_wifi
+    mac_address:
+      name: MAC Address
+      state_topic: null
+      web_server:
+        sorting_weight: 1
+        sorting_group_id: sorting_group_wifi
+    ssid:
+      name: Connected SSID
+      state_topic: null
+      web_server:
+        sorting_weight: 2
+        sorting_group_id: sorting_group_wifi
+    bssid:
+      name: Connected BSSID
+      state_topic: null
+      web_server:
+        sorting_weight: 3
+        sorting_group_id: sorting_group_wifi
+
+sensor:
+  - platform: wifi_signal
+    name: Wifi Signal
+    update_interval: 15s
+    state_topic: null
+    web_server:
+      sorting_weight: 4
+      sorting_group_id: sorting_group_wifi
