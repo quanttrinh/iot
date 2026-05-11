@@ -4,12 +4,12 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: ESPHome version to use
+        description: ESPHome version
         required: false
         type: string
         default: latest
       release:
-        description: Whether to create a release
+        description: Create a release
         required: false
         type: boolean
         default: false
@@ -22,54 +22,114 @@ permissions:
   contents: write
 
 jobs:
+  setup:
+    runs-on: ubuntu-latest
+    name: setup
+    outputs:
+      python_version: ${{ steps.setup_python.outputs.python-version }}
+      esphome_version: ${{ steps.get_version.outputs.esphome_version }}
+    steps:
+      - name: Setup Python
+        uses: actions/setup-python@v6
+        id: setup_python
+        with:
+          python-version: 3.14
+
+      - name: Get ESPHome version
+        id: get_version
+        run: |
+          python -m pip index versions --json esphome > esphome_versions.json
+          if [[ "${{ inputs.version }}" == "latest" ]]; then
+            version=$(jq -r '.latest' esphome_versions.json)
+          else
+            version=$(jq -r --arg version "${{ inputs.version }}" '.versions[] | select(startswith($version))' esphome_versions.json | sort -V | tail -n 1)
+            if [[ -z "$version" ]]; then
+              echo "No matching ESPHome version found for '${{ inputs.version }}'"
+              exit 1
+            fi
+          fi
+          echo "esphome_version=$version" >> $GITHUB_OUTPUT
+
+      - name: Restore cached venv
+        uses: actions/cache/restore@v5
+        id: restore_venv
+        with:
+          key: venv-${{ runner.os }}-${{ steps.setup_python.outputs.python-version }}-${{ steps.get_version.outputs.esphome_version }}
+          path: .venv
+
+      - name: Install ESPhome in venv
+        if: ${{ steps.restore_venv.outputs.cache-hit != 'true' }}
+        run: |
+          python -m venv .venv
+          source .venv/bin/activate
+          python -m pip install esphome==${{ steps.get_version.outputs.esphome_version }}
+
+      - name: Save cached venv
+        uses: actions/cache/save@v5
+        if: ${{ steps.restore_venv.outputs.cache-hit != 'true' }}
+        with:
+          key: venv-${{ runner.os }}-${{ steps.setup_python.outputs.python-version }}-${{ steps.get_version.outputs.esphome_version }}
+          path: .venv
+
   build:
+    needs: setup
     strategy:
       matrix:
         config: [ yx-ws01, globe-esp8285h16 ]
     runs-on: ubuntu-latest
     name: build
     steps:
-      - uses: actions/checkout@v6
+      - name: Checkout repository
+        uses: actions/checkout@v6
         with:
           fetch-depth: 0
 
-      - uses: actions/setup-python@v6
+      - name: Setup Python
+        uses: actions/setup-python@v6
         with:
-          python-version: '3.12'
+          python-version: ${{ needs.setup.outputs.python_version }}
+      
+      - name: Restore cached venv
+        uses: actions/cache/restore@v5
+        id: restore_venv
+        with:
+          key: venv-${{ runner.os }}-${{ needs.setup.outputs.python_version }}-${{ needs.setup.outputs.esphome_version }}
+          path: .venv
 
-      - name: Install ESPHome
+      - name: Setup ESPhome venv
         run: |
-          if [[ "${{ inputs.version }}" == "latest" ]]; then
-            pip install esphome
-          else
-            pip install esphome~=${{ inputs.version }}
+          python -m venv .venv
+          source .venv/bin/activate
+          if [ "${{ steps.restore_venv.outputs.cache-hit }}" != 'true' ]; then
+            python -m pip install esphome==${{ needs.setup.outputs.esphome_version }}
           fi
+          echo "$VIRTUAL_ENV/bin" >> $GITHUB_PATH
+          echo "VIRTUAL_ENV=$VIRTUAL_ENV" >> $GITHUB_ENV
 
       - name: Compile firmware
         id: compile
         run: |
+          mkdir -p build
           cd configs
           esphome compile ${{ matrix.config }}.yaml
           config=".esphome/storage/${{ matrix.config }}.yaml.json"
           name=$(jq -r '.name' "$config")
-          esphome_version=$(jq -r '.esphome_version' "$config")
           firmware_bin_path=$(jq -r '.firmware_bin_path' "$config")
-          cd ..
-          mkdir -p build/
-          cd build/
-          echo "name="$name"" > version.src
-          echo "esphome_version="$esphome_version"" >> version.src
-          mv "$firmware_bin_path" "$name-$(basename "$firmware_bin_path")"
+          cd ../build
+          fwfile="$name-$(basename "$firmware_bin_path")"
+          mv "$firmware_bin_path" "$fwfile"
+          echo "name="$name"" > "$name.src"
+          echo "firmware_file=$fwfile" >> "$name.src"
           echo "name=$name" >> $GITHUB_OUTPUT
 
-      - uses: actions/upload-artifact@v6
+      - uses: actions/upload-artifact@v7
         with:
           name: ${{ steps.compile.outputs.name }}
           path: |
             build/*
 
   release:
-    needs: build
+    needs: [setup, build]
     runs-on: ubuntu-latest
     steps:
       - name: Get current date
@@ -84,19 +144,21 @@ jobs:
 
       - name: Generate release notes
         run: |
-          echo "## Release - v${{ steps.date.outputs.datever }}" > release_body.md
-          echo "| Device | ESPHome Version |" >> release_body.md
+          echo "**ESPHome Version**: ${{ needs.setup.outputs.esphome_version }}" >> release_body.md
+          echo "| Device | Firmware File |" >> release_body.md
           echo "| --- | --- |" >> release_body.md
           for src in artifacts/*.src; do
             source "$src"
-            echo "| $name | $esphome_version |" >> release_body.md
+            echo "| $name | $firmware_file |" >> release_body.md
           done
 
-      - uses: softprops/action-gh-release@v2
+      - uses: softprops/action-gh-release@v3
         if: ${{ inputs.release }}
         with:
           tag_name: v${{ steps.date.outputs.datever }}
+          target_commitish: ${{ github.sha }}
           body_path: release_body.md
+          generate_release_notes: true
           make_latest: true
           working_directory: artifacts
           files: |
