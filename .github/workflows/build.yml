@@ -75,7 +75,7 @@ jobs:
     needs: setup
     strategy:
       matrix:
-        config: [ yx-ws01, globe-esp8285h16 ]
+        config: [ yx-ws01, globe-50329-esp8285 ]
     runs-on: ubuntu-latest
     name: build
     steps:

@@ -3,7 +3,7 @@ packages:
 
 esphome:
   name: yx-ws01-bk7231n
-  friendly_name: YX-WS01 Switch
+  friendly_name: YX-WS01 Smart Plug
 
 bk72xx:
   board: generic-bk7231n-qfn32-tuya
